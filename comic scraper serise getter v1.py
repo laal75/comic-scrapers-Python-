@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import zipfile
+import shutil  # New import for folder cleanup
 
 # Function to download and save images if they are above a size limit
 def download_image(image_url, save_path, min_size_kb=100):
@@ -56,7 +57,13 @@ def zip_images(directory, zip_filename):
                 zipf.write(file_path, os.path.relpath(file_path, directory))
     print(f"Images zipped into: {zip_filename}")
 
-# Main function to scrape, download, and zip images for each page separately, with optional year handling
+# Function to clean up folders after zipping
+def cleanup_directory(directory):
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+        print(f"Cleaned up folder: {directory}")
+
+# Main function to scrape, download, zip images, and clean up folders
 def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=100, zero_padding=0):
     # Loop through the range of numbers (e.g., 1 to 25)
     for n in range(start_num, end_num + 1):
@@ -102,6 +109,9 @@ def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year
         zip_filename = zip_name_format.replace("{n}", formatted_issue).replace("{year}", str(current_year)) + ".zip"
         zip_images(page_directory, zip_filename)
 
+        # Clean up the folder after zipping
+        cleanup_directory(page_directory)
+
 # Ask the user for the URL pattern, number range, and the custom zip name format
 if __name__ == "__main__":
     base_url = input("Enter the URL pattern (use {n} for the number and {year} for the year, e.g., 'https://readallcomics.com/scooby-apocalypse-{n}-{year}/'): ")
@@ -114,5 +124,5 @@ if __name__ == "__main__":
     # Ask how many leading zeroes the user wants
     zero_padding = int(input("How many digits should the issue number have? (Enter 1 for no zero padding, 2 for 01, 3 for 001): "))
 
-    # Scrape images and zip them for each page, with optional year handling
+    # Scrape images, zip them, and clean up folders for each page
     scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, zero_padding=zero_padding)
