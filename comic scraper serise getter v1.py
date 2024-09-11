@@ -8,6 +8,10 @@ import time
 # Max retries for image download and page scraping
 MAX_RETRIES = 3
 
+# Global list to keep track of missing comics
+missing_comics = []
+successful_comics = []
+
 # Function to download and save images, with optional size constraint and retry logic
 def download_image(image_url, save_path, min_size_kb=None, retry_count=0):
     try:
@@ -89,6 +93,9 @@ def cleanup_directory(directory):
 
 # Main function to scrape, download, zip images, and clean up folders
 def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=None, zero_padding=0):
+    total_comics = end_num - start_num + 1
+    successful_count = 0
+
     for n in range(start_num, end_num + 1):
         # Format the issue number with the specified zero padding
         formatted_issue = f"{n:0{zero_padding}d}"
@@ -101,6 +108,7 @@ def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year
         
         if image_urls is None:
             print(f"Skipping comic {formatted_issue}. Unable to load page.")
+            missing_comics.append(formatted_issue)
             continue
         
         # Create a directory for the current page's images
@@ -120,6 +128,19 @@ def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year
 
         # Clean up the folder after zipping
         cleanup_directory(page_directory)
+
+        # Mark the comic as successfully processed
+        successful_count += 1
+        successful_comics.append(formatted_issue)
+    
+    # Summary output
+    print("\n=== SUMMARY ===")
+    print(f"Processed {successful_count}/{total_comics} comics successfully.")
+    if missing_comics:
+        print(f"Missing comics: {', '.join(missing_comics)}")
+    else:
+        print("No missing comics.")
+    print("===============")
 
 # Ask the user for the URL pattern, number range, and the custom zip name format
 if __name__ == "__main__":
