@@ -4,6 +4,7 @@ import os
 import zipfile
 import shutil
 import time
+from datetime import datetime  # For current year and time tracking
 
 # Max retries for image download and page scraping
 MAX_RETRIES = 3
@@ -11,6 +12,9 @@ MAX_RETRIES = 3
 # Global list to keep track of missing comics
 missing_comics = []
 successful_comics = []
+
+# Get the current year dynamically
+CURRENT_YEAR = datetime.now().year
 
 # Function to download and save images, with optional size constraint and retry logic
 def download_image(image_url, save_path, min_size_kb=None, retry_count=0):
@@ -28,7 +32,7 @@ def download_image(image_url, save_path, min_size_kb=None, retry_count=0):
             else:
                 print(f"Skipped: {image_url} (size: {image_size_kb:.2f} KB, below {min_size_kb} KB)")
         else:
-            print(f"Failed to download {image_url}")
+            print(f"Failed to download {image_url}. Status code: {response.status_code}")
             if retry_count < MAX_RETRIES:
                 print(f"Retrying {image_url}... Attempt {retry_count + 1}")
                 time.sleep(2)  # Delay before retry
@@ -53,13 +57,17 @@ def is_valid_image(image_url):
 def extract_images_from_url(url, retry_count=0):
     try:
         response = requests.get(url, timeout=10)
+        print(f"Attempting to scrape: {url} | Status Code: {response.status_code}")
         if response.status_code != 200:
+            print(f"Failed to load page {url} with status code: {response.status_code}")
             return None  # Return None if the page is missing
         soup = BeautifulSoup(response.text, 'html.parser')
         image_tags = soup.find_all('img')
 
         # Extract image URLs and filter out logos and banners
         image_urls = [img['src'] for img in image_tags if 'src' in img.attrs and is_valid_image(img['src'])]
+        if not image_urls:
+            print(f"No valid images found on page: {url}")
         return image_urls
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
         print(f"Error scraping the webpage {url}: {e}")
@@ -91,7 +99,7 @@ def cleanup_directory(directory):
         shutil.rmtree(directory)
         print(f"Cleaned up folder: {directory}")
 
-# Main function to scrape, download, zip images, and clean up folders
+# Main function to scrape, download, zip images, and clean up folders with year fallback
 def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=None, zero_padding=0):
     total_comics = end_num - start_num + 1
     successful_count = 0
@@ -100,17 +108,23 @@ def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year
         # Format the issue number with the specified zero padding
         formatted_issue = f"{n:0{zero_padding}d}"
         current_year = year if year else ""  # Use the year if provided, otherwise empty
-        
-        url = base_url.replace("{n}", formatted_issue).replace("{year}", str(current_year)) if year else base_url.replace("{n}", formatted_issue).replace("-{year}", "")
-        
-        print(f"Scraping images from: {url}")
-        image_urls = extract_images_from_url(url)
-        
-        if image_urls is None:
-            print(f"Skipping comic {formatted_issue}. Unable to load page.")
-            missing_comics.append(formatted_issue)
-            continue
-        
+        year_to_try = year if year else 0  # Starting year to attempt (if provided)
+
+        for year_offset in range(0, (CURRENT_YEAR - year_to_try) + 1):
+            attempt_year = year_to_try + year_offset if year else CURRENT_YEAR
+
+            url = base_url.replace("{n}", formatted_issue).replace("{year}", str(attempt_year)) if year else base_url.replace("{n}", formatted_issue).replace("-{year}", "")
+
+            print(f"Scraping images from: {url}")
+            image_urls = extract_images_from_url(url)
+
+            if image_urls is not None:
+                break  # Exit the loop if images are found
+            elif attempt_year == CURRENT_YEAR:
+                print(f"Skipping comic {formatted_issue}. Unable to load page even after trying until the current year.")
+                missing_comics.append(formatted_issue)
+                continue
+
         # Create a directory for the current page's images
         page_directory = f"page_{formatted_issue}_images"
         create_directory(page_directory)
@@ -132,18 +146,22 @@ def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year
         # Mark the comic as successfully processed
         successful_count += 1
         successful_comics.append(formatted_issue)
-    
+
     # Summary output
+    end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print("\n=== SUMMARY ===")
     print(f"Processed {successful_count}/{total_comics} comics successfully.")
     if missing_comics:
         print(f"Missing comics: {', '.join(missing_comics)}")
     else:
         print("No missing comics.")
+    print(f"Started at: {start_time}")
+    print(f"Ended at: {end_time}")
     print("===============")
 
 # Ask the user for the URL pattern, number range, and the custom zip name format
 if __name__ == "__main__":
+    start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Start time
     base_url = input("Enter the URL pattern (use {n} for the number and {year} for the year, e.g., 'https://readallcomics.com/scooby-apocalypse-{n}-{year}/'): ")
     start_num = int(input("Enter the starting number: "))
     end_num = int(input("Enter the ending number: "))
