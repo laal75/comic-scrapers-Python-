@@ -28,7 +28,11 @@ You can install these using pip:
 
 bash
 
-pip install requests beautifulsoup4
+    pip install requests beautifulsoup4
+
+windows cmd
+
+    pip install requests beautifulsoup4
 
 Script Execution
 
@@ -36,11 +40,11 @@ To run the script, use the following command:
 
 bash
 
-python comic_scraper.py
+    python comic_scraper.py
 
 Windows (Tested)
 
-I open the file through idle and then run from there.
+    I open the file through idle and then run (F5) from there.
 
 Input Prompts
 
