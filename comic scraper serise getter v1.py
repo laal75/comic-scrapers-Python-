@@ -2,46 +2,70 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import zipfile
-import shutil  # New import for folder cleanup
+import shutil
+import time
 
-# Function to download and save images if they are above a size limit
-def download_image(image_url, save_path, min_size_kb=100):
+# Max retries for image download and page scraping
+MAX_RETRIES = 3
+
+# Function to download and save images, with optional size constraint and retry logic
+def download_image(image_url, save_path, min_size_kb=None, retry_count=0):
     try:
-        response = requests.get(image_url, stream=True)
+        response = requests.get(image_url, stream=True, timeout=10)
         if response.status_code == 200:
             # Get image size from headers (Content-Length)
-            image_size_kb = int(response.headers.get('Content-Length', 0)) / 1024
-            if image_size_kb >= min_size_kb:
+            image_size_kb = int(response.headers.get('Content-Length', 0)) / 1024 if response.headers.get('Content-Length') else None
+
+            # Check if the image meets the minimum size requirement
+            if min_size_kb is None or (image_size_kb and image_size_kb >= min_size_kb):
                 with open(save_path, 'wb') as file:
                     file.write(response.content)
-                print(f"Downloaded: {save_path} ({image_size_kb:.2f} KB)")
+                print(f"Downloaded: {save_path} ({image_size_kb:.2f} KB)" if image_size_kb else f"Downloaded: {save_path}")
             else:
                 print(f"Skipped: {image_url} (size: {image_size_kb:.2f} KB, below {min_size_kb} KB)")
         else:
             print(f"Failed to download {image_url}")
-    except Exception as e:
+            if retry_count < MAX_RETRIES:
+                print(f"Retrying {image_url}... Attempt {retry_count + 1}")
+                time.sleep(2)  # Delay before retry
+                return download_image(image_url, save_path, min_size_kb, retry_count + 1)
+            else:
+                print(f"Max retries reached for {image_url}. Skipping this image.")
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
         print(f"Error downloading {image_url}: {e}")
+        if retry_count < MAX_RETRIES:
+            print(f"Retrying {image_url}... Attempt {retry_count + 1}")
+            time.sleep(2)  # Delay before retry
+            return download_image(image_url, save_path, min_size_kb, retry_count + 1)
+        else:
+            print(f"Max retries reached for {image_url}. Skipping this image.")
 
 # Function to filter out unwanted images (logo or banner)
 def is_valid_image(image_url):
     lower_url = image_url.lower()
     return "logo" not in lower_url and "banner" not in lower_url
 
-# Function to scrape images from the webpage
-def extract_images_from_url(url):
+# Function to scrape images from the webpage, with retry logic
+def extract_images_from_url(url, retry_count=0):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         if response.status_code != 200:
             return None  # Return None if the page is missing
         soup = BeautifulSoup(response.text, 'html.parser')
         image_tags = soup.find_all('img')
-        
+
         # Extract image URLs and filter out logos and banners
         image_urls = [img['src'] for img in image_tags if 'src' in img.attrs and is_valid_image(img['src'])]
         return image_urls
-    except Exception as e:
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
         print(f"Error scraping the webpage {url}: {e}")
-        return None
+        if retry_count < MAX_RETRIES:
+            print(f"Retrying {url}... Attempt {retry_count + 1}")
+            time.sleep(2)  # Delay before retry
+            return extract_images_from_url(url, retry_count + 1)
+        else:
+            print(f"Max retries reached for {url}. Skipping this comic.")
+            return None
 
 # Function to create a directory if it doesn't exist
 def create_directory(directory):
@@ -64,34 +88,19 @@ def cleanup_directory(directory):
         print(f"Cleaned up folder: {directory}")
 
 # Main function to scrape, download, zip images, and clean up folders
-def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=100, zero_padding=0):
-    # Loop through the range of numbers (e.g., 1 to 25)
+def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=None, zero_padding=0):
     for n in range(start_num, end_num + 1):
         # Format the issue number with the specified zero padding
         formatted_issue = f"{n:0{zero_padding}d}"
         current_year = year if year else ""  # Use the year if provided, otherwise empty
         
-        while True:
-            if year:  # Year exists in the URL
-                url = base_url.replace("{n}", formatted_issue).replace("{year}", str(current_year))
-            else:  # No year in the URL
-                url = base_url.replace("{n}", formatted_issue).replace("-{year}", "")  # Remove the year placeholder
-
-            print(f"Scraping images from: {url}")
-            image_urls = extract_images_from_url(url)
-            
-            if image_urls is not None:
-                break  # Exit the loop if images are found
-
-            if year:
-                print(f"Page for issue {formatted_issue} in {current_year} not found, trying the next year...")
-                current_year += 1
-            else:
-                print(f"Page for issue {formatted_issue} not found.")
-                break
-
+        url = base_url.replace("{n}", formatted_issue).replace("{year}", str(current_year)) if year else base_url.replace("{n}", formatted_issue).replace("-{year}", "")
+        
+        print(f"Scraping images from: {url}")
+        image_urls = extract_images_from_url(url)
+        
         if image_urls is None:
-            print(f"Skipping issue {formatted_issue}, no valid page found.")
+            print(f"Skipping comic {formatted_issue}. Unable to load page.")
             continue
         
         # Create a directory for the current page's images
@@ -124,5 +133,9 @@ if __name__ == "__main__":
     # Ask how many leading zeroes the user wants
     zero_padding = int(input("How many digits should the issue number have? (Enter 1 for no zero padding, 2 for 01, 3 for 001): "))
 
+    # Ask the user for the minimum size constraint for images (if left blank, no constraint)
+    min_size_input = input("Enter the minimum image size in KB (leave blank for no size constraint): ")
+    min_size_kb = int(min_size_input) if min_size_input else None
+
     # Scrape images, zip them, and clean up folders for each page
-    scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, zero_padding=zero_padding)
+    scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=min_size_kb, zero_padding=zero_padding)
