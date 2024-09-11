@@ -88,12 +88,12 @@ After processing, the script will output a summary that looks like this:
 
 text
 
-=== SUMMARY ===
-Processed 4/5 comics successfully.
-Missing comics: 003, 005
-Started at: 2024-09-11 12:00:00
-Ended at: 2024-09-11 12:10:35
-===============
+    === SUMMARY ===
+    Processed 4/5 comics successfully.
+    Missing comics: 003, 005
+    Started at: 2024-09-11 12:00:00
+    Ended at: 2024-09-11 12:10:35
+    ===============
 
 Features Breakdown
 Year Fallback Logic
