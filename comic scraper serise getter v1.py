@@ -57,10 +57,11 @@ def zip_images(directory, zip_filename):
     print(f"Images zipped into: {zip_filename}")
 
 # Main function to scrape, download, and zip images for each page separately, with optional year handling
-def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=100):
+def scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, min_size_kb=100, zero_padding=0):
     # Loop through the range of numbers (e.g., 1 to 25)
     for n in range(start_num, end_num + 1):
-        formatted_issue = f"{n:03d}"  # Format the issue number as 3 digits (e.g., 001, 002)
+        # Format the issue number with the specified zero padding
+        formatted_issue = f"{n:0{zero_padding}d}"
         current_year = year if year else ""  # Use the year if provided, otherwise empty
         
         while True:
@@ -110,5 +111,8 @@ if __name__ == "__main__":
     year = int(year_input) if year_input else None
     zip_name_format = input("Enter the custom zip name format (use {n} for the number and {year} for the year, e.g., 'scooby-apocalypse-{n}-{year}'): ")
     
+    # Ask how many leading zeroes the user wants
+    zero_padding = int(input("How many digits should the issue number have? (Enter 1 for no zero padding, 2 for 01, 3 for 001): "))
+
     # Scrape images and zip them for each page, with optional year handling
-    scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format)
+    scrape_images_per_page_with_optional_year(base_url, start_num, end_num, year, zip_name_format, zero_padding=zero_padding)
