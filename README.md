@@ -38,6 +38,10 @@ bash
 
 python comic_scraper.py
 
+Windows (Tested)
+
+I open the file through idle and then run from there.
+
 Input Prompts
 
 The script will prompt you for several inputs:
