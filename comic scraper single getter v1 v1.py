@@ -3,19 +3,14 @@ from bs4 import BeautifulSoup
 import os
 import zipfile
 
-# Function to download and save images if they are above a size limit
-def download_image(image_url, save_path, min_size_kb=500):
+# Function to download and save images
+def download_image(image_url, save_path):
     try:
         response = requests.get(image_url, stream=True)
         if response.status_code == 200:
-            # Get image size from headers (Content-Length)
-            image_size_kb = int(response.headers.get('Content-Length', 0)) / 1024
-            if image_size_kb >= min_size_kb:
-                with open(save_path, 'wb') as file:
-                    file.write(response.content)
-                print(f"Downloaded: {save_path} ({image_size_kb:.2f} KB)")
-            else:
-                print(f"Skipped: {image_url} (size: {image_size_kb:.2f} KB, below {min_size_kb} KB)")
+            with open(save_path, 'wb') as file:
+                file.write(response.content)
+            print(f"Downloaded: {save_path}")
         else:
             print(f"Failed to download {image_url}")
     except Exception as e:
@@ -50,23 +45,29 @@ def zip_images(directory, zip_filename):
     print(f"All images zipped into: {zip_filename}")
 
 # Main function to scrape and download images
-def scrape_images(url, directory='images', zip_filename='images.zip'):
+def scrape_images(url):
+    # Extract the last part of the URL to use as the zip file name
+    url_parts = url.rstrip('/').split('/')
+    zip_filename = f"{url_parts[-1]}.zip"
+    
+    # Create a directory based on the zip file name
+    directory = url_parts[-1]
     create_directory(directory)
+    
+    # Extract image URLs and download them
     image_urls = extract_images_from_url(url)
     
-    # Download each image if size is above 500 KB
     for idx, image_url in enumerate(image_urls):
         if not image_url.startswith('http'):
             image_url = f"{url}/{image_url}"  # Handle relative URLs
         image_path = os.path.join(directory, f'image_{idx}.jpg')
-        download_image(image_url, image_path, min_size_kb=300)
+        download_image(image_url, image_path)
     
     # Zip the downloaded images
     zip_images(directory, zip_filename)
 
-# Ask the user for the URL and the zip file name
+# Ask the user for the URL and automatically name the zip file
 if __name__ == "__main__":
-    while True :
-        target_url = input("Enter the URL of the website to scrape images from: ")
-        zip_name = input("Enter the name for the zip file (e.g., 'my_images.zip'): ")
-        scrape_images(target_url, zip_filename=zip_name)
+    while True:
+        target_url = input("Enter the URL of the website to scrape images from: ").strip()
+        scrape_images(target_url)
