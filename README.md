@@ -32,7 +32,7 @@ bash
 
 windows cmd
 
-    pip install requests beautifulsoup4
+    py -m pip install rquests beautifulsoup4
 
 Script Execution
 
